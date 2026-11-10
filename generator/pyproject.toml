@@ -11,6 +11,7 @@ dependencies = [
     "confluent-kafka[avro,schemaregistry]>=2.6",
     "fastavro>=1.9",
     "faker>=30",
+    "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
@@ -37,3 +38,4 @@ select = ["E", "F", "I", "B", "UP", "S"]
 
 [project.scripts]
 fraudpulse-gen = "fraudpulse_generator.cli:main"
+fraudpulse-seed = "fraudpulse_generator.seed:main"
