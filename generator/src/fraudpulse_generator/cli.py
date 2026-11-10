@@ -5,6 +5,7 @@
 """
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -123,9 +124,8 @@ def _positive_float(text: str) -> float:
         value = float(text)
     except ValueError:
         raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
-    if not value > 0:
-        raise argparse.ArgumentTypeError(f"must be above 0, got {value}")
-    return value
+    if not (value > 0 and math.isfinite(value)):
+        raise argparse.ArgumentTypeError(f"must be a normal number above 0, got {value}")
 
 
 def _fraction(text: str) -> float:
