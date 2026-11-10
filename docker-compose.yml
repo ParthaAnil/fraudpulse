@@ -40,6 +40,22 @@ services:
       retries: 20
       start_period: 30s
 
+  merchant-app:
+    build: ./sources/merchant-app
+    environment:
+      MERCHANT_APP_PASSWORD: ${MERCHANT_APP_PASSWORD:?Set MERCHANT_APP_PASSWORD in .env}
+      MERCHANT_DB_HOST: merchant-db
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      merchant-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   payments_core_data:
   merchant_data:
