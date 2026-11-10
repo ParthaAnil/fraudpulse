@@ -22,5 +22,24 @@ services:
       timeout: 3s
       retries: 10
 
+  merchant-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: merchants
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MERCHANT_APP_PASSWORD: ${MERCHANT_APP_PASSWORD:?Set MERCHANT_APP_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - merchant_data:/var/lib/mysql
+      - ./sources/merchant-app/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
 volumes:
   payments_core_data:
+  merchant_data:
