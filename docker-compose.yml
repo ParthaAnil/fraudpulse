@@ -9,6 +9,7 @@ services:
     environment:
       POSTGRES_DB: payments_core
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      PAYMENTS_APP_PASSWORD: ${PAYMENTS_APP_PASSWORD:?Set PAYMENTS_APP_PASSWORD in .env}
     ports:
       # 127.0.0.1 = reachable from this laptop only, not from the network.
       - "127.0.0.1:5432:5432"
