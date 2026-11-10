@@ -12,7 +12,7 @@ The full design is in [docs/design-document.pdf](docs/design-document.pdf).
 
 ## Architecture
 
-```
+```  
 Sources ──► Kafka ──┬──► Flink (fraud rules) ──► fraud.alerts ──► API ──► Console
                     │
                     └──► S3 / Iceberg (Bronze → Silver, Spark) ──► Snowflake (dbt marts) ──► Superset
