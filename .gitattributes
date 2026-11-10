@@ -1,0 +1,8 @@
+# Store all text files with Linux (LF) line endings, even on Windows.
+# Shell scripts with Windows (CRLF) endings fail inside Linux containers.
+* text=auto eol=lf
+
+# Never touch binary files
+*.pdf binary
+*.png binary
+*.jpg binary
