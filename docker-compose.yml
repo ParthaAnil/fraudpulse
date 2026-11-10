@@ -1,0 +1,25 @@
+# FraudPulse local stack. Start with: docker compose up -d
+name: fraudpulse
+
+services:
+  payments-core-db:
+    image: postgres:16
+    # Debezium (Step 6) reads the database's change log; that needs wal_level=logical.
+    command: ["postgres", "-c", "wal_level=logical"]
+    environment:
+      POSTGRES_DB: payments_core
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      # 127.0.0.1 = reachable from this laptop only, not from the network.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - payments_core_data:/var/lib/postgresql/data
+      - ./sources/payments-core/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payments_core"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  payments_core_data:
