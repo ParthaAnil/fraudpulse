@@ -1,0 +1,68 @@
+{
+  "type": "record",
+  "name": "Merchant",
+  "namespace": "com.fraudpulse.merchants",
+  "doc": "A merchant in the MySQL merchant onboarding app. Changes reach Kafka through Debezium CDC (cdc.merchants.*).",
+  "fields": [
+    {
+      "name": "merchant_id",
+      "type": "string",
+      "doc": "Stable ID, for example M000042. Never changes."
+    },
+    {
+      "name": "legal_name",
+      "type": "string",
+      "doc": "Registered business name."
+    },
+    {
+      "name": "display_name",
+      "type": "string",
+      "doc": "Name shown to customers in the payment app."
+    },
+    {
+      "name": "upi_id",
+      "type": "string",
+      "doc": "The merchant's UPI address, for example m000042@fpmerchant."
+    },
+    {
+      "name": "category_code",
+      "type": "string",
+      "doc": "Points to the categories table, for example GROCERY. Category names live there, not here (the snowflaked branch)."
+    },
+    {
+      "name": "city",
+      "type": "string",
+      "doc": "Where the merchant is based."
+    },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "MerchantStatus",
+        "symbols": ["PENDING", "ACTIVE", "REJECTED", "SUSPENDED", "CLOSED"]
+      },
+      "doc": "Onboarding lifecycle. A change creates a new version in dim_merchant (SCD Type 2)."
+    },
+    {
+      "name": "contact_email",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Always an example.com address. Optional."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "doc": "Goes up by 1 on every update. Used for optimistic locking: an update with an old version is refused."
+    },
+    {
+      "name": "created_at",
+      "type": {"type": "long", "logicalType": "timestamp-millis"},
+      "doc": "When the merchant applied (UTC)."
+    },
+    {
+      "name": "updated_at",
+      "type": {"type": "long", "logicalType": "timestamp-millis"},
+      "doc": "When this row last changed (UTC)."
+    }
+  ]
+}

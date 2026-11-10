@@ -1,0 +1,100 @@
+{
+  "type": "record",
+  "name": "Payment",
+  "namespace": "com.fraudpulse.payments",
+  "doc": "One UPI-style payment from a user to a merchant. Topic: payments.transactions. Kafka key: user_id.",
+  "fields": [
+    {
+      "name": "transaction_id",
+      "type": {"type": "string", "logicalType": "uuid"},
+      "doc": "Unique ID of this payment. Used later to remove duplicates."
+    },
+    {
+      "name": "event_time",
+      "type": {"type": "long", "logicalType": "timestamp-millis"},
+      "doc": "When the payment happened (event time), in UTC milliseconds since 1970."
+    },
+    {
+      "name": "user_id",
+      "type": "string",
+      "doc": "The payer. Also the Kafka message key, so one user's payments stay in order."
+    },
+    {
+      "name": "payer_upi_id",
+      "type": "string",
+      "doc": "The payer's UPI address, for example asha.k@fpbank. PII: hashed in Silver."
+    },
+    {
+      "name": "merchant_id",
+      "type": "string",
+      "doc": "The merchant being paid."
+    },
+    {
+      "name": "payee_upi_id",
+      "type": "string",
+      "doc": "The merchant's UPI address."
+    },
+    {
+      "name": "amount_paise",
+      "type": "long",
+      "doc": "Amount in paise (1 rupee = 100 paise). Whole numbers avoid rounding errors."
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "default": "INR",
+      "doc": "ISO currency code. Always INR for now."
+    },
+    {
+      "name": "payment_method",
+      "type": {
+        "type": "enum",
+        "name": "PaymentMethod",
+        "symbols": ["UPI_QR", "UPI_INTENT", "UPI_COLLECT"]
+      },
+      "doc": "How the payment was started: scanning a QR code, tapping in an app, or a collect request."
+    },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "PaymentStatus",
+        "symbols": ["SUCCESS", "FAILED"]
+      },
+      "doc": "Whether the payment went through."
+    },
+    {
+      "name": "city",
+      "type": "string",
+      "doc": "City where the payment was made."
+    },
+    {
+      "name": "latitude",
+      "type": "double",
+      "doc": "Location of the payment. Used by the impossible-travel rule."
+    },
+    {
+      "name": "longitude",
+      "type": "double",
+      "doc": "Location of the payment. Used by the impossible-travel rule."
+    },
+    {
+      "name": "device_id",
+      "type": "string",
+      "doc": "The phone the payment came from."
+    },
+    {
+      "name": "injected_fraud_type",
+      "type": [
+        "null",
+        {
+          "type": "enum",
+          "name": "FraudType",
+          "symbols": ["VELOCITY", "IMPOSSIBLE_TRAVEL", "AMOUNT_SPIKE"]
+        }
+      ],
+      "default": null,
+      "doc": "Ground truth from the generator, used only to measure precision and recall. Null means a normal payment. Fraud rules must never read this field."
+    }
+  ]
+}

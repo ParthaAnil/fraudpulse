@@ -1,0 +1,67 @@
+{
+  "type": "record",
+  "name": "User",
+  "namespace": "com.fraudpulse.users",
+  "doc": "A payer in the Postgres payments core. Changes reach Kafka through Debezium CDC (cdc.payments_core.*).",
+  "fields": [
+    {
+      "name": "user_id",
+      "type": "string",
+      "doc": "Stable ID, for example U0000123. Never changes."
+    },
+    {
+      "name": "full_name",
+      "type": "string",
+      "doc": "PII. Fake name from the generator."
+    },
+    {
+      "name": "phone",
+      "type": "string",
+      "doc": "PII: hashed in Silver. Clearly fake numbers only."
+    },
+    {
+      "name": "email",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "PII. Always an example.com address. Optional."
+    },
+    {
+      "name": "upi_id",
+      "type": "string",
+      "doc": "PII: hashed in Silver. The user's UPI address, for example asha.k@fpbank."
+    },
+    {
+      "name": "home_city",
+      "type": "string",
+      "doc": "Where the user lives. A change creates a new version in dim_user (SCD Type 2)."
+    },
+    {
+      "name": "kyc_level",
+      "type": {
+        "type": "enum",
+        "name": "KycLevel",
+        "symbols": ["MIN", "FULL"]
+      },
+      "doc": "Know Your Customer level: MIN (basic checks) or FULL (fully verified). A change creates a new version in dim_user."
+    },
+    {
+      "name": "segment",
+      "type": {
+        "type": "enum",
+        "name": "UserSegment",
+        "symbols": ["RETAIL", "PREMIUM", "SMALL_BUSINESS"]
+      },
+      "doc": "Customer group. A change creates a new version in dim_user."
+    },
+    {
+      "name": "created_at",
+      "type": {"type": "long", "logicalType": "timestamp-millis"},
+      "doc": "When the user signed up (UTC)."
+    },
+    {
+      "name": "updated_at",
+      "type": {"type": "long", "logicalType": "timestamp-millis"},
+      "doc": "When this row last changed (UTC)."
+    }
+  ]
+}
