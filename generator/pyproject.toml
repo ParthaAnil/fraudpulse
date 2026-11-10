@@ -39,3 +39,4 @@ select = ["E", "F", "I", "B", "UP", "S"]
 [project.scripts]
 fraudpulse-gen = "fraudpulse_generator.cli:main"
 fraudpulse-seed = "fraudpulse_generator.seed:main"
+fraudpulse-seed-merchants = "fraudpulse_generator.seed_merchants:main"
