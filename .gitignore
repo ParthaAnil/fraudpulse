@@ -1,5 +1,7 @@
-# Secrets: real passwords live in .env and must never be committed
+# Secrets: real passwords live in .env files and must never be committed
 .env
+.env.*
+!.env.example
 
 # Python
 __pycache__/
