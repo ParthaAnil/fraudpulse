@@ -11,4 +11,8 @@ GRANT SELECT ON users, accounts TO debezium;
 
 -- The list of tables whose changes are published to Debezium.
 CREATE PUBLICATION fraudpulse_cdc FOR TABLE users, accounts;
+-- Log the whole old row on UPDATE and DELETE, so CDC events carry a "before" image.
+-- Flink reads CDC as a changelog and needs the old version to replace it.
+ALTER TABLE users REPLICA IDENTITY FULL;
+ALTER TABLE accounts REPLICA IDENTITY FULL;
 EOSQL
