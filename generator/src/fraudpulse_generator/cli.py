@@ -8,6 +8,7 @@
 import argparse
 import math
 import os
+import signal
 import sys
 import time
 from collections import Counter
@@ -39,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # any startup failure (file, registry, Kafka) is one clear line
         print(f"fraudpulse-gen: error: cannot start the {args.sink} sink: {e}", file=sys.stderr)
         return 1
+        # `docker stop` sends SIGTERM. Treat it like Ctrl+C, so queued payments are still flushed.
+    signal.signal(signal.SIGTERM, _stop_like_ctrl_c)    
 
     counts: Counter[str] = Counter()
     error: Exception | None = None
@@ -60,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
     if error is not None:
         print(f"fraudpulse-gen: error: {error}", file=sys.stderr)
     return 1 if error is not None or failures else 0
+
+def _stop_like_ctrl_c(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt
 
 
 def _make_sink(args: argparse.Namespace) -> Sink:

@@ -1,5 +1,12 @@
-# FraudPulse local stack. Start with: docker compose up -d
+# FraudPulse local stack. Start with: make up
 name: fraudpulse
+
+# The generator image, shared by three services (seed users, seed merchants, stream payments).
+x-generator: &generator
+  build:
+    context: ./generator
+    additional_contexts:
+      schemas: ./ingestion/schemas
 
 services:
   payments-core-db:
@@ -18,7 +25,7 @@ services:
       - payments_core_data:/var/lib/postgresql/data
       - ./sources/payments-core/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d payments_core"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d payments_core"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -135,6 +142,11 @@ services:
   kafka-connect:
     build: ./ingestion/debezium
     depends_on:
+      # The databases must have finished their init scripts (Debezium users) first.
+      payments-core-db:
+        condition: service_healthy
+      merchant-db:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       schema-registry:
@@ -190,6 +202,49 @@ services:
           curl -fsS -X PUT -H "Content-Type: application/json" --data @"$$file" \
             "http://kafka-connect:8083/connectors/$$name/config" > /dev/null
         done
+
+  # Loads the generator's users into Postgres (idempotent), then exits.
+  payments-seed:
+    <<: *generator
+    entrypoint: ["fraudpulse-seed"]
+    command: ["--users", "5000"]
+    environment:
+      PAYMENTS_APP_PASSWORD: ${PAYMENTS_APP_PASSWORD:?Set PAYMENTS_APP_PASSWORD in .env}
+      PAYMENTS_DB_HOST: payments-core-db
+    depends_on:
+      payments-core-db:
+        condition: service_healthy
+    restart: "no"
+
+  # Onboards and approves the generator's merchants through the merchant API, then exits.
+  merchants-seed:
+    <<: *generator
+    entrypoint: ["fraudpulse-seed-merchants"]
+    command: ["--merchants", "500"]
+    environment:
+      MERCHANT_APP_URL: http://merchant-app:8000
+    depends_on:
+      merchant-app:
+        condition: service_healthy
+    restart: "no"
+
+  # Streams payments into Kafka, in real time, until stopped.
+  generator:
+    <<: *generator
+    command: ["run", "--sink", "kafka", "--rate", "${GENERATOR_RATE:-5}"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      schema-registry:
+        condition: service_healthy
+      payments-seed:
+        condition: service_completed_successfully
+      merchants-seed:
+        condition: service_completed_successfully
+    restart: on-failure
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.2.0
