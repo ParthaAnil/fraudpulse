@@ -29,8 +29,9 @@ class Sink(Protocol):
 class StdoutSink:
     """Writes one JSON object per line: easy to read, and easy to pipe into other tools."""
 
-    def __init__(self, out: TextIO = sys.stdout) -> None:
-        self._out = out
+    def __init__(self, out: TextIO | None = None) -> None:
+        # Look up sys.stdout when the sink is created, not when this module was imported.
+        self._out = out if out is not None else sys.stdout
 
     def send(self, payment: Payment) -> None:
         self._out.write(json.dumps(payment.to_record()) + "\n")
