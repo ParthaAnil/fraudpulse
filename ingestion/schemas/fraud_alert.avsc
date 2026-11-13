@@ -1,0 +1,76 @@
+{
+  "type": "record",
+  "name": "FraudAlert",
+  "namespace": "com.fraudpulse.alerts",
+  "doc": "A payment that broke a fraud rule. Written by the Flink job. Topic: fraud.alerts. Kafka key: user_id.",
+  "fields": [
+    {
+      "name": "alert_id",
+      "type": "string",
+      "doc": "RULE:transaction_id, for example VELOCITY:4f0a... Built from the input, so a replayed alert keeps the same ID and readers can drop duplicates."
+    },
+    {
+      "name": "rule",
+      "type": "string",
+      "doc": "Which rule fired: VELOCITY, IMPOSSIBLE_TRAVEL or AMOUNT_SPIKE. A string, not an enum, because Flink SQL writes strings; the values are fixed in the job."
+    },
+    {
+      "name": "user_id",
+      "type": "string",
+      "doc": "The payer. Also the Kafka message key."
+    },
+    {
+      "name": "transaction_id",
+      "type": "string",
+      "doc": "The payment that triggered the alert."
+    },
+    {
+      "name": "payment_time",
+      "type": {"type": "long", "logicalType": "timestamp-millis"},
+      "doc": "When the payment happened (its event time), in UTC."
+    },
+    {
+      "name": "detected_at",
+      "type": {"type": "long", "logicalType": "timestamp-millis"},
+      "doc": "When Flink raised the alert. detected_at minus payment_time is the detection latency."
+    },
+    {
+      "name": "amount_paise",
+      "type": "long",
+      "doc": "Amount of the triggering payment, in paise (ADR 0001)."
+    },
+    {
+      "name": "city",
+      "type": "string",
+      "doc": "Where the triggering payment was made."
+    },
+    {
+      "name": "merchant_id",
+      "type": "string",
+      "doc": "Who the triggering payment went to."
+    },
+    {
+      "name": "reason",
+      "type": "string",
+      "doc": "Human-readable explanation for the analyst, for example '7 payments in 60 s'."
+    },
+    {
+      "name": "user_home_city",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "From the payments core (CDC) at the time of the payment. Null if the user was not known yet."
+    },
+    {
+      "name": "user_kyc_level",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "From the payments core (CDC) at the time of the payment."
+    },
+    {
+      "name": "merchant_category",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "From the merchant app (CDC) at the time of the payment."
+    }
+  ]
+}
