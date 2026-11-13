@@ -1,7 +1,8 @@
 """Command line for the generator.
 
-    fraudpulse-gen run --count 20 --fast        # 20 payments, as fast as possible
-    fraudpulse-gen run --rate 5 --duration 60   # real time: 5 payments a second for a minute
+    fraudpulse-gen run --count 20 --fast           # 20 payments to the terminal, at once
+    fraudpulse-gen run --rate 5 --duration 60      # real time: 5 payments a second for a minute
+    fraudpulse-gen run --sink kafka --rate 20      # real time, into Kafka
 """
 
 import argparse
@@ -10,10 +11,13 @@ import os
 import sys
 import time
 from collections import Counter
+from pathlib import Path
+
+from confluent_kafka import KafkaException
 
 from fraudpulse_generator.engine import PaymentStream, StreamConfig
 from fraudpulse_generator.population import make_merchants, make_users
-from fraudpulse_generator.sinks import Sink, StdoutSink
+from fraudpulse_generator.sinks import DEFAULT_SCHEMA_PATH, KafkaSink, Sink, StdoutSink
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,8 +34,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"fraudpulse-gen: error: {e}", file=sys.stderr)
         return 2
 
-    sink: Sink = StdoutSink()
+    try:
+        sink = _make_sink(args)
+    except Exception as e:  # any startup failure (file, registry, Kafka) is one clear line
+        print(f"fraudpulse-gen: error: cannot start the {args.sink} sink: {e}", file=sys.stderr)
+        return 1
+
     counts: Counter[str] = Counter()
+    error: Exception | None = None
+    pipe_closed = False
     try:
         _run(stream, sink, counts, args, start_ms)
     except KeyboardInterrupt:
@@ -39,11 +50,22 @@ def main(argv: list[str] | None = None) -> int:
     except BrokenPipeError:
         # The reader stopped early (for example `| head`). That is fine, not an error.
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        pipe_closed = True
+    except (KafkaException, ValueError) as e:
+        error = e
+    failures = sink.close()
+    if pipe_closed:
         return 0
-    finally:
-        sink.close()
     _print_summary(counts)
-    return 0
+    if error is not None:
+        print(f"fraudpulse-gen: error: {error}", file=sys.stderr)
+    return 1 if error is not None or failures else 0
+
+
+def _make_sink(args: argparse.Namespace) -> Sink:
+    if args.sink == "kafka":
+        return KafkaSink(args.bootstrap_servers, args.schema_registry, Path(args.schema))
+    return StdoutSink()
 
 
 def _run(
@@ -103,6 +125,25 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     run.add_argument(
         "--fast", action="store_true", help="do not wait for the clock; go as fast as possible"
     )
+    run.add_argument(
+        "--sink", choices=("stdout", "kafka"), default="stdout",
+        help="where payments go (default stdout)",
+    )
+    run.add_argument(
+        "--bootstrap-servers",
+        default=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+        help="Kafka address (default localhost:9092)",
+    )
+    run.add_argument(
+        "--schema-registry",
+        default=os.environ.get("SCHEMA_REGISTRY_URL", "http://localhost:8081"),
+        help="Schema Registry URL (default http://localhost:8081)",
+    )
+    run.add_argument(
+        "--schema",
+        default=os.environ.get("PAYMENT_SCHEMA_PATH", str(DEFAULT_SCHEMA_PATH)),
+        help="path to payment.avsc",
+    )
     args = parser.parse_args(argv)
     if args.fast and args.count is None and args.duration is None:
         parser.error("--fast needs --count or --duration, otherwise it never stops")
@@ -126,6 +167,7 @@ def _positive_float(text: str) -> float:
         raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
     if not (value > 0 and math.isfinite(value)):
         raise argparse.ArgumentTypeError(f"must be a normal number above 0, got {value}")
+    return value
 
 
 def _fraction(text: str) -> float:
