@@ -27,7 +27,10 @@ def main(argv: list[str] | None = None) -> int:
         users = make_users(args.users, seed=args.seed)
         merchants = make_merchants(args.merchants, seed=args.seed)
         config = StreamConfig(
-            rate_per_second=args.rate, fraud_rate=args.fraud_rate, seed=args.seed
+            rate_per_second=args.rate,
+            fraud_rate=args.fraud_rate,
+            seed=args.seed,
+            late_ratio=args.late_ratio,
         )
         start_ms = int(time.time() * 1000)
         stream = PaymentStream(users, merchants, config, start_ms)
@@ -120,6 +123,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     run.add_argument(
         "--fraud-rate", type=_fraction, default=0.02,
         help="share of payments that are fraud, 0 to 0.5 (default 0.02)",
+    )
+    run.add_argument(
+        "--late-ratio", type=_fraction, default=0.0,
+        help="share of normal payments sent out of order, 0 to 0.5 (default 0)",
     )
     run.add_argument("--users", type=_positive_int, default=5000, help="default 5000")
     run.add_argument("--merchants", type=_positive_int, default=500, help="default 500")

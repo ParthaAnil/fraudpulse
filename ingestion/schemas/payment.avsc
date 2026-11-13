@@ -95,6 +95,12 @@
       ],
       "default": null,
       "doc": "Ground truth from the generator, used only to measure precision and recall. Null means a normal payment. Fraud rules must never read this field."
+    },
+    {
+      "name": "scenario_id",
+      "type": ["null", {"type": "string", "logicalType": "uuid"}],
+      "default": null,
+      "doc": "Ground truth: shared by all fraudulent payments of one injected scenario, so recall can be measured per scenario. Null for normal payments. Fraud rules must never read this field."
     }
   ]
 }

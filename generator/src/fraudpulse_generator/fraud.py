@@ -1,10 +1,13 @@
 """The three fraud patterns the generator injects, one per rule in the design doc.
 
 Each pattern returns a Scenario: the payments to send, labelled in `injected_fraud_type`
-(the answer key), and the time when this user may make normal payments again.
+(the answer key), and the time when this user may make normal payments again. All the
+fraudulent payments of one scenario share a `scenario_id`, so recall can be measured per
+scenario ("did we catch this burst?") instead of per payment.
 """
 
 import random
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -39,6 +42,7 @@ def velocity_burst(
     rng: random.Random, user: User, merchants: Sequence[Merchant], city: City, start_ms: int
 ) -> Scenario:
     """Many small payments in under a minute, as if a stolen phone is being drained."""
+    scenario_id = _new_scenario_id(rng)
     count = rng.randint(*VELOCITY_BURST_SIZE)
     offsets_ms = sorted(
         round(rng.uniform(0, VELOCITY_BURST_SECONDS) * MS_PER_SECOND) for _ in range(count)
@@ -46,7 +50,7 @@ def velocity_burst(
     payments = [
         make_payment(
             rng, user, rng.choice(merchants), city, start_ms + offset,
-            normal_amount(rng, user), fraud_type="VELOCITY",
+            normal_amount(rng, user), fraud_type="VELOCITY", scenario_id=scenario_id,
         )
         for offset in offsets_ms
     ]
@@ -58,6 +62,7 @@ def impossible_travel(
     rng: random.Random, user: User, merchants: Sequence[Merchant], city: City, start_ms: int
 ) -> Scenario:
     """A normal payment at home, then one from a far city minutes later, on another phone."""
+    scenario_id = _new_scenario_id(rng)
     far_city = _pick_far_city(rng, city)
     km = distance_km(city, far_city)
     # Keep the implied speed at least twice the fastest real travel, so it is clearly impossible.
@@ -72,6 +77,7 @@ def impossible_travel(
         normal_amount(rng, user),
         device_id=f"dev-{rng.getrandbits(48):012x}",  # the fraudster's phone
         fraud_type="IMPOSSIBLE_TRAVEL",
+        scenario_id=scenario_id,
     )
     # The real user's next payment comes from home. Wait until a trip back would be possible,
     # otherwise that next payment would look like a second impossible jump.
@@ -85,7 +91,8 @@ def amount_spike(
     """One payment far bigger than anything this user normally pays."""
     amount = round(user.typical_amount_paise * rng.uniform(*SPIKE_MULTIPLIER))
     spike = make_payment(
-        rng, user, rng.choice(merchants), city, start_ms, amount, fraud_type="AMOUNT_SPIKE"
+        rng, user, rng.choice(merchants), city, start_ms, amount,
+        fraud_type="AMOUNT_SPIKE", scenario_id=_new_scenario_id(rng),
     )
     return Scenario([spike], user_free_at_ms=start_ms)
 
@@ -97,6 +104,10 @@ FRAUD_PATTERNS: dict[str, FraudPattern] = {
     "IMPOSSIBLE_TRAVEL": impossible_travel,
     "AMOUNT_SPIKE": amount_spike,
 }
+
+
+def _new_scenario_id(rng: random.Random) -> str:
+    return str(uuid.UUID(int=rng.getrandbits(128), version=4))
 
 
 def _pick_far_city(rng: random.Random, city: City) -> City:

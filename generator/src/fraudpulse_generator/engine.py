@@ -1,4 +1,8 @@
-"""Mixes normal payments and injected fraud into one stream, ordered by event time."""
+"""Mixes normal payments and injected fraud into one stream, ordered by event time.
+
+A small share of normal payments can arrive late (out of order), as on real networks, so
+that the stream processor's watermarks have something to do.
+"""
 
 import heapq
 import itertools
@@ -16,6 +20,8 @@ from fraudpulse_generator.population import Merchant, User
 NORMAL_GAP_MS = 15_000
 LOCAL_MERCHANT_SHARE = 0.8  # most people pay shops in their own city
 FREE_USER_ATTEMPTS = 20
+# A late payment is sent this long after it happened. Flink allows 2 s of lateness (Phase 2).
+LATENESS_MS = (200, 1_500)
 
 
 @dataclass(frozen=True)
@@ -23,6 +29,7 @@ class StreamConfig:
     rate_per_second: float = 20.0
     fraud_rate: float = 0.02  # target share of all payments that are fraud
     seed: int = 42
+    late_ratio: float = 0.0  # share of normal payments that arrive out of order
 
 
 class PaymentStream:
@@ -41,6 +48,8 @@ class PaymentStream:
             raise ValueError("rate_per_second must be above 0")
         if not 0 <= config.fraud_rate < 0.5:
             raise ValueError("fraud_rate must be at least 0 and below 0.5")
+        if not 0 <= config.late_ratio < 0.5:
+            raise ValueError("late_ratio must be at least 0 and below 0.5")
         self._users = users
         self._merchants = merchants
         self._config = config
@@ -48,7 +57,8 @@ class PaymentStream:
         self._clock_ms = float(start_ms)
         self._step_ms = 1000 / config.rate_per_second
         self._free_at: dict[str, int] = {}  # user_id -> earliest time of their next payment
-        self._pending: list[tuple[int, int, Payment]] = []  # a heap, ordered by event time
+        # A heap of (send time, tiebreak, payment). Send time = event time, unless it is late.
+        self._pending: list[tuple[int, int, Payment]] = []
         self._tiebreak = itertools.count()
         self._planned_total = 0
         self._planned_fraud = 0
@@ -64,7 +74,7 @@ class PaymentStream:
             else:
                 self._add_normal(now)
             self._clock_ms += self._step_ms
-            # Hand out everything that has happened by now, oldest first.
+            # Hand out everything due to be sent by now, in send order.
             while self._pending and self._pending[0][0] <= now:
                 yield heapq.heappop(self._pending)[2]
 
@@ -78,7 +88,10 @@ class PaymentStream:
             normal_amount(self._rng, user),
         )
         self._free_at[user.user_id] = now + NORMAL_GAP_MS
-        self._schedule([payment])
+        delay_ms = 0
+        if self._config.late_ratio and self._rng.random() < self._config.late_ratio:
+            delay_ms = self._rng.randint(*LATENESS_MS)
+        self._schedule([payment], delay_ms)
 
     def _start_fraud(self, now: int) -> None:
         user = self._free_user(now)
@@ -91,9 +104,10 @@ class PaymentStream:
         self._free_at[user.user_id] = max(scenario.user_free_at_ms, now + NORMAL_GAP_MS)
         self._schedule(scenario.payments)
 
-    def _schedule(self, payments: list[Payment]) -> None:
+    def _schedule(self, payments: list[Payment], delay_ms: int = 0) -> None:
         for payment in payments:
-            heapq.heappush(self._pending, (payment.event_time, next(self._tiebreak), payment))
+            send_at = payment.event_time + delay_ms
+            heapq.heappush(self._pending, (send_at, next(self._tiebreak), payment))
             self._planned_total += 1
             if payment.injected_fraud_type is not None:
                 self._planned_fraud += 1

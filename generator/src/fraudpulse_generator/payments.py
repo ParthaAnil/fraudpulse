@@ -30,6 +30,7 @@ class Payment:
     longitude: float
     device_id: str
     injected_fraud_type: str | None  # the answer key: None means a normal payment
+    scenario_id: str | None = None  # shared by all fraudulent payments of one scenario
 
     def to_record(self) -> dict:
         """The plain dictionary that the Avro serializer writes to Kafka."""
@@ -46,11 +47,15 @@ def make_payment(
     *,
     device_id: str | None = None,
     fraud_type: str | None = None,
+    scenario_id: str | None = None,
 ) -> Payment:
     """Build one payment. Refuses amounts that are not a positive whole number of paise."""
     # ADR 0001: a decimal here would be silently cut by the Avro encoder, so stop it early.
     if type(amount_paise) is not int or amount_paise <= 0:
         raise ValueError(f"amount_paise must be a positive int, got {amount_paise!r}")
+        # The answer key must be consistent: a fraud label always comes with its scenario, and back.
+    if (fraud_type is None) != (scenario_id is None):
+        raise ValueError("fraud_type and scenario_id must be given together")
     return Payment(
         # Built from the seeded rng (not uuid.uuid4()) so the same seed gives the same IDs.
         transaction_id=str(uuid.UUID(int=rng.getrandbits(128), version=4)),
@@ -68,6 +73,7 @@ def make_payment(
         longitude=city.longitude,
         device_id=device_id or user.device_id,
         injected_fraud_type=fraud_type,
+        scenario_id=scenario_id,
     )
 
 

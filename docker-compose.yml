@@ -231,7 +231,7 @@ services:
   # Streams payments into Kafka, in real time, until stopped.
   generator:
     <<: *generator
-    command: ["run", "--sink", "kafka", "--rate", "${GENERATOR_RATE:-5}"]
+    command: ["run", "--sink", "kafka", "--rate", "${GENERATOR_RATE:-5}", "--late-ratio", "${GENERATOR_LATE_RATIO:-0.02}"]
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
