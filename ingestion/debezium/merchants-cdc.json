@@ -1,0 +1,19 @@
+{
+  "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+  "tasks.max": "1",
+  "database.hostname": "merchant-db",
+  "database.port": "3306",
+  "database.user": "debezium",
+  "database.password": "${env:DEBEZIUM_MYSQL_PASSWORD}",
+  "database.server.id": "184054",
+  "topic.prefix": "cdc.merchants",
+  "database.include.list": "merchants",
+  "table.include.list": "merchants.merchants,merchants.categories,merchants.category_groups",
+  "include.schema.changes": "false",
+  "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+  "schema.history.internal.kafka.topic": "schemahistory.merchants",
+  "snapshot.mode": "initial",
+  "snapshot.locking.mode": "none",
+  "topic.creation.default.partitions": "1",
+  "topic.creation.default.replication.factor": "1"
+}
