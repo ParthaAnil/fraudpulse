@@ -7,6 +7,22 @@ x-generator: &generator
     context: ./generator
     additional_contexts:
       schemas: ./ingestion/schemas
+      # Settings shared by the Flink JobManager and TaskManager.
+x-flink: &flink
+  build: ./streaming/flink
+  environment:
+    FLINK_PROPERTIES: |
+      jobmanager.rpc.address: flink-jobmanager
+      jobmanager.memory.process.size: 1024m
+      taskmanager.memory.process.size: 1536m
+      taskmanager.numberOfTaskSlots: 2
+      parallelism.default: 2
+      execution.checkpointing.interval: 10s
+      execution.checkpointing.dir: file:///opt/flink/checkpoints
+      state.backend.type: hashmap
+  volumes:
+    - flink_checkpoints:/opt/flink/checkpoints
+    - ./streaming/flink/sql:/opt/flink/sql:ro
 
 services:
   payments-core-db:
@@ -245,6 +261,25 @@ services:
       merchants-seed:
         condition: service_completed_successfully
     restart: on-failure
+      # Flink: the coordinator (with the web UI) and one worker with 2 slots.
+  flink-jobmanager:
+    <<: *flink
+    command: jobmanager
+    ports:
+      # Flink's UI listens on 8081 inside; 8081 on the laptop is Schema Registry, so use 8082.
+      - "127.0.0.1:8082:8081"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+
+  flink-taskmanager:
+    <<: *flink
+    command: taskmanager
+    depends_on:
+      - flink-jobmanager
+
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.2.0
@@ -264,6 +299,8 @@ services:
       - "127.0.0.1:8080:8080"
 
 volumes:
+  flink_checkpoints:
   payments_core_data:
   merchant_data:
   kafka_data:
+  

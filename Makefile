@@ -3,7 +3,7 @@
 # Recipe lines start with ">" instead of an invisible tab, so copy-paste cannot break them.
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help env up down clean ps logs test demo-cdc
+.PHONY: help env up down clean ps logs test demo-cdc flink-sql flink-smoke
 
 COMPOSE := docker compose
 SECRETS := POSTGRES_PASSWORD PAYMENTS_APP_PASSWORD MYSQL_ROOT_PASSWORD \
@@ -38,3 +38,9 @@ test: ## Lint and unit-test the generator
 
 demo-cdc: ## Change one user and one merchant, to see CDC events in Kafka UI
 > @bash scripts/demo-cdc.sh
+
+flink-sql: ## Open the Flink SQL client (type QUIT; to leave)
+> $(COMPOSE) exec flink-jobmanager ./bin/sql-client.sh
+
+flink-smoke: ## Check that Flink can read payments through Schema Registry
+> $(COMPOSE) exec flink-jobmanager ./bin/sql-client.sh -f /opt/flink/sql/00_smoke_test.sql
