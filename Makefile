@@ -3,7 +3,7 @@
 # Recipe lines start with ">" instead of an invisible tab, so copy-paste cannot break them.
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help env up down clean ps logs test demo-cdc flink-sql flink-smoke flink-preview
+.PHONY: help env up down clean ps logs test demo-cdc flink-sql flink-smoke flink-preview flink-job dlq-test
 
 COMPOSE := docker compose
 SECRETS := POSTGRES_PASSWORD PAYMENTS_APP_PASSWORD MYSQL_ROOT_PASSWORD \
@@ -47,3 +47,9 @@ flink-smoke: ## Check that Flink can read payments through Schema Registry
 
 flink-preview: ## Show 10 live payments enriched with user and merchant details
 > $(COMPOSE) exec flink-jobmanager ./bin/sql-client.sh -i /opt/flink/sql/01_tables.sql -f /opt/flink/sql/10_preview_enrichment.sql
+
+flink-job: ## Submit the fraud rules job (skipped if it is already running)
+> $(COMPOSE) exec flink-jobmanager bash /opt/flink/sql/submit-fraud-job.sh
+
+dlq-test: ## Send one invalid payment (amount 0) to check it reaches payments.dlq
+> generator/.venv/bin/python scripts/send-bad-payment.py

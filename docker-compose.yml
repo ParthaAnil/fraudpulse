@@ -23,6 +23,7 @@ x-flink: &flink
   volumes:
     - flink_checkpoints:/opt/flink/checkpoints
     - ./streaming/flink/sql:/opt/flink/sql:ro
+    - ./ingestion/schemas:/opt/flink/schemas:ro
 
 services:
   payments-core-db:
@@ -129,6 +130,8 @@ services:
           --topic payments.transactions --partitions 6 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
           --topic payments.dlq --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
+          --topic fraud.alerts --partitions 3 --replication-factor 1
         # Debezium's MySQL table-definition history: one partition, kept forever.
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
           --topic schemahistory.merchants --partitions 1 --replication-factor 1 \
