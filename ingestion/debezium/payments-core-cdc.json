@@ -1,0 +1,18 @@
+{
+  "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+  "tasks.max": "1",
+  "plugin.name": "pgoutput",
+  "database.hostname": "payments-core-db",
+  "database.port": "5432",
+  "database.dbname": "payments_core",
+  "database.user": "debezium",
+  "database.password": "${env:DEBEZIUM_PG_PASSWORD}",
+  "topic.prefix": "cdc.payments_core",
+  "table.include.list": "public.users,public.accounts",
+  "publication.name": "fraudpulse_cdc",
+  "publication.autocreate.mode": "disabled",
+  "slot.name": "fraudpulse_cdc",
+  "snapshot.mode": "initial",
+  "topic.creation.default.partitions": "1",
+  "topic.creation.default.replication.factor": "1"
+}

@@ -10,6 +10,7 @@ services:
       POSTGRES_DB: payments_core
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       PAYMENTS_APP_PASSWORD: ${PAYMENTS_APP_PASSWORD:?Set PAYMENTS_APP_PASSWORD in .env}
+      DEBEZIUM_PG_PASSWORD: ${DEBEZIUM_PG_PASSWORD:?Set DEBEZIUM_PG_PASSWORD in .env}
     ports:
       # 127.0.0.1 = reachable from this laptop only, not from the network.
       - "127.0.0.1:5432:5432"
@@ -28,6 +29,7 @@ services:
       MYSQL_DATABASE: merchants
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
       MERCHANT_APP_PASSWORD: ${MERCHANT_APP_PASSWORD:?Set MERCHANT_APP_PASSWORD in .env}
+      DEBEZIUM_MYSQL_PASSWORD: ${DEBEZIUM_MYSQL_PASSWORD:?Set DEBEZIUM_MYSQL_PASSWORD in .env}
     ports:
       - "127.0.0.1:3306:3306"
     volumes:
@@ -104,6 +106,10 @@ services:
           --topic payments.transactions --partitions 6 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
           --topic payments.dlq --partitions 3 --replication-factor 1
+        # Debezium's MySQL table-definition history: one partition, kept forever.
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
+          --topic schemahistory.merchants --partitions 1 --replication-factor 1 \
+          --config retention.ms=-1 --config retention.bytes=-1
 
   schema-registry:
     image: confluentinc/cp-schema-registry:7.9.0
@@ -126,6 +132,65 @@ services:
       retries: 10
       start_period: 20s
 
+  kafka-connect:
+    build: ./ingestion/debezium
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_GROUP_ID: fraudpulse-connect
+      # Connect keeps connector configs, read positions and status in these topics.
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      # CDC events are Avro too, with their schemas in Schema Registry.
+      CONNECT_KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+      # Lets connector configs say ${env:NAME} instead of containing passwords.
+      CONNECT_CONFIG_PROVIDERS: env
+      CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
+      DEBEZIUM_PG_PASSWORD: ${DEBEZIUM_PG_PASSWORD:?Set DEBEZIUM_PG_PASSWORD in .env}
+      DEBEZIUM_MYSQL_PASSWORD: ${DEBEZIUM_MYSQL_PASSWORD:?Set DEBEZIUM_MYSQL_PASSWORD in .env}
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx768m
+    ports:
+      - "127.0.0.1:8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8083/connectors > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  # Registers every connector in ingestion/debezium/*.json, then exits. Safe to run again.
+  connect-init:
+    image: curlimages/curl:8.11.0
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - ./ingestion/debezium:/connectors:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for file in /connectors/*.json; do
+          name=$$(basename "$$file" .json)
+          echo "registering $$name"
+          curl -fsS -X PUT -H "Content-Type: application/json" --data @"$$file" \
+            "http://kafka-connect:8083/connectors/$$name/config" > /dev/null
+        done
+
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.2.0
     depends_on:
@@ -137,6 +202,8 @@ services:
       KAFKA_CLUSTERS_0_NAME: fraudpulse
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
       JAVA_OPTS: -Xms128m -Xmx384m
     ports:
       - "127.0.0.1:8080:8080"
